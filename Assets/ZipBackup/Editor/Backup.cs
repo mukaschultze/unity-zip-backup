@@ -1,8 +1,9 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using UnityEditor;
+using UnityEditorInternal;
 using UnityEngine;
-using Debug = UnityEngine.Debug;
 
 namespace ZipBackup {
     public enum ZipModes {
@@ -15,19 +16,19 @@ namespace ZipBackup {
 
         static Backup() {
             EditorApplication.update += () => {
-                if (DateTime.Now.Subtract(lastBackup).Ticks > backupTimeSpan.Ticks && CanBackup() && autoBackup)
+                if (DateTime.Now.Subtract(lastBackupTime).Ticks > backupTimeSpan.Ticks && CanBackup() && autoBackup)
                     try {
                         StartBackup();
                     }
-                catch (Exception e) {
+                catch (Exception ex) {
                     Debug.LogWarning("Disabling auto backup, if the error persists contact the developer");
-                    Debug.LogException(e);
+                    Debug.LogException(ex);
                     autoBackup = false;
                 }
             };
         }
 
-        private static bool backuping;
+        private static bool backingup;
         private static Vector2 scroll;
 
         private static readonly GUIContent zipModeContent = new GUIContent("Zip mode", "The application that will be used to zip files");
@@ -73,26 +74,24 @@ namespace ZipBackup {
         }
         private static string saveLocation {
             get {
-                if (!useCustomSaveLocation || string.IsNullOrEmpty(customSaveLocation))
-                    return (Application.dataPath.ToLower() + "/@@@@@").Replace("/assets/@@@@@", "/Backups/");
-                else
-                    return customSaveLocation;
+                return !useCustomSaveLocation || string.IsNullOrEmpty(customSaveLocation) ?
+                    Path.Combine(Application.dataPath, "../Backups/") :
+                    customSaveLocation;
             }
         }
         private static string productNameForFile {
             get {
                 var name = Application.productName;
                 var chars = Path.GetInvalidFileNameChars();
-                for (int i = 0; i < chars.Length; i++)
-                    name = name.Replace(chars[i], '_');
-                return name;
+
+                return chars.Aggregate(name, (acc, c) => acc.Replace(c, '-'));
             }
         }
         private static TimeSpan backupTimeSpan {
             get { return TimeSpan.FromSeconds(EditorPrefs.GetInt("BackupTimeSpan", (int)TimeSpan.FromHours(8).TotalSeconds)); }
             set { EditorPrefs.SetInt("BackupTimeSpan", (int)value.TotalSeconds); }
         }
-        private static DateTime lastBackup {
+        private static DateTime lastBackupTime {
             get { return DateTime.Parse(PlayerPrefs.GetString("BackupLastBackup", DateTime.MinValue.ToString())); }
             set { PlayerPrefs.SetString("BackupLastBackup", value.ToString()); }
         }
@@ -129,6 +128,8 @@ namespace ZipBackup {
                 threads = EditorGUILayout.IntSlider(threadsContent, threads, 1, 30);
             }
 
+            EditorGUILayout.Space();
+
             logToConsole = EditorGUILayout.Toggle(logToConsoleContent, logToConsole);
 
             EditorGUILayout.Space();
@@ -137,7 +138,7 @@ namespace ZipBackup {
                 EditorGUILayout.BeginHorizontal();
                 EditorGUILayout.PrefixLabel(customSaveLocationContent, EditorStyles.popup);
                 if (GUILayout.Button(string.IsNullOrEmpty(customSaveLocation) ? "Browse..." : customSaveLocation, EditorStyles.popup, GUILayout.Width(150f))) {
-                    var path = EditorUtility.OpenFolderPanel("Browse for backups folder", customSaveLocation, "Backups");
+                    var path = EditorUtility.OpenFolderPanel("Select backups destination", customSaveLocation, "Backups");
                     if (path.Length > 0)
                         customSaveLocation = path;
                 }
@@ -165,16 +166,16 @@ namespace ZipBackup {
 
             EditorGUILayout.Space();
 
-            if (lastBackup != DateTime.MinValue)
-                EditorGUILayout.LabelField("Last backup: " + lastBackup);
+            if (lastBackupTime != DateTime.MinValue)
+                EditorGUILayout.LabelField("Last backup: " + lastBackupTime);
             else
-                EditorGUILayout.LabelField("Last backup: Never backuped");
-            if (backuping)
-                EditorGUILayout.LabelField("Next backup: Backuping now...");
+                EditorGUILayout.LabelField("Last backup: Never backed up");
+            if (backingup)
+                EditorGUILayout.LabelField("Next backup: Backing up now...");
             else if (!autoBackup)
                 EditorGUILayout.LabelField("Next backup: Disabled");
             else
-                EditorGUILayout.LabelField("Next backup: " + lastBackup.Add(backupTimeSpan));
+                EditorGUILayout.LabelField("Next backup: " + lastBackupTime.Add(backupTimeSpan));
 
             EditorGUILayout.EndScrollView();
             EditorGUILayout.BeginHorizontal();
@@ -189,7 +190,7 @@ namespace ZipBackup {
                 EditorPrefs.DeleteKey("BackupCustomSave");
                 EditorPrefs.DeleteKey("BackupTimeSpan");
             }
-            GUI.enabled = !backuping;
+            GUI.enabled = !backingup;
             if (GUILayout.Button("Backup now", GUILayout.Width(120f)))
                 StartBackup();
             GUI.enabled = true;
@@ -198,50 +199,68 @@ namespace ZipBackup {
 
         [MenuItem("Assets/Backup Now")]
         public static void StartBackup() {
-            if (backuping || (!FastZip.isSupported && !SevenZip.isSupported) && !EditorApplication.isPlaying)
+
+            if (!CanBackup())
                 return;
 
-            var path = string.Format("{0}/{1}_backup_{2}.zip", saveLocation, productNameForFile, DateTime.Now.ToString(@"yyyy-dd-MM-HH-mm"));
-            var assetsPath = Application.dataPath;
-            var projectSettingsPath = Application.dataPath.Replace("/Assets", "/ProjectSettings");
+            var filename = string.Format("{0}-backup-{1}.zip", productNameForFile, DateTime.Now.ToString("yyyy-MM-ddTHH-mm"));
+
+            var outputPath = Path.GetFullPath(Path.Combine(saveLocation, filename));
+            var assetsPath = Path.GetFullPath(Application.dataPath);
+            var projectSettingsPath = Path.GetFullPath(Path.Combine(Application.dataPath, "../ProjectSettings"));
+
             var startTime = EditorApplication.timeSinceStartup;
             ZipProcess zip;
 
             if ((mode == ZipModes.FastZip && FastZip.isSupported) || !SevenZip.isSupported) {
-                zip = new FastZip(path, assetsPath, projectSettingsPath);
-                (zip as FastZip).packLevel = packLevel;
-                (zip as FastZip).threads = threads;
-                (zip as FastZip).earlyOutPercent = earlyOut;
+                var fastZip = new FastZip(outputPath, assetsPath, projectSettingsPath);
+                fastZip.packLevel = packLevel;
+                fastZip.threads = threads;
+                fastZip.earlyOutPercent = earlyOut;
+                zip = fastZip;
             } else
-                zip = new SevenZip(path, assetsPath, projectSettingsPath);
+                zip = new SevenZip(outputPath, assetsPath, projectSettingsPath);
 
-            zip.onExit += (o, a) => {
-                backuping = false;
-                lastBackup = DateTime.Now;
+            zip.errorDataReceived += (sender, args) => {
+                Debug.LogErrorFormat("Zip Error: {0}", args.Data);
+            };
+
+            zip.onExit += (sender, args) => {
+                backingup = false;
+                lastBackupTime = DateTime.Now;
 
                 if (zip.process.ExitCode == 0)
-                    using(var stream = new FileStream(path, FileMode.Open)) {
+                    using(var stream = new FileStream(outputPath, FileMode.Open)) {
                         var zipSize = stream.Length;
                         var time = (EditorApplication.timeSinceStartup - startTime).ToString("0.00");
 
                         if (logToConsole)
                             Debug.LogFormat("Backed up project into {0} in {1} seconds", EditorUtility.FormatBytes(zipSize), time);
                     }
-                else if (logToConsole)
-                    Debug.LogWarning("Something went wrong while zipping");
+                else // Always show warning messages
+                    Debug.LogWarningFormat("Something went wrong while zipping, process exited with code {0}", zip.process.ExitCode);
+
+                InternalEditorUtility.RepaintAllViews();
             };
 
-            backuping = zip.Start();
+            backingup = zip.Start();
 
-            if (logToConsole)
-                Debug.Log(backuping ? "Backuping..." : "Error starting zip process");
-            if (!backuping)
-                lastBackup = DateTime.Now;
+            if (!backingup)
+                Debug.LogWarning("Failed to spawn zip process");
+            else if (logToConsole)
+                Debug.Log("Backing up...");
+
+            if (!backingup)
+                lastBackupTime = DateTime.Now;
+
+            InternalEditorUtility.RepaintAllViews();
+
         }
 
         [MenuItem("Assets/Backup Now", true)]
         private static bool CanBackup() {
-            return !backuping && (FastZip.isSupported || SevenZip.isSupported) && !EditorApplication.isPlaying;
+            return !EditorApplication.isPlaying && !backingup && (FastZip.isSupported || SevenZip.isSupported);
         }
+
     }
 }

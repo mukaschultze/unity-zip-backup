@@ -1,16 +1,18 @@
 ﻿using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
 namespace ZipBackup {
+
     [Flags]
     public enum FastZipOpt {
         None = 0,
-        ZipMode = 1,
-        JunkPaths = 2,
-        Verbose = 4,
+        ZipMode = 1 << 0,
+        JunkPaths = 1 << 1,
+        Verbose = 1 << 2,
     }
 
     public sealed class FastZip : ZipProcess {
@@ -20,25 +22,24 @@ namespace ZipBackup {
         public int earlyOutPercent { get; set; }
         public FastZipOpt options { get; set; }
 
-        new public static bool isSupported {
+        public static bool isSupported {
             get {
-                if (string.IsNullOrEmpty(path))
-                    return false;
-                #if UNITY_5_5_OR_NEWER
-                return SystemInfo.operatingSystemFamily == OperatingSystemFamily.Windows && SystemInfo.operatingSystem.Contains("64bit");
-                #else
-                return SystemInfo.operatingSystem.ToLower().Contains("windows") && SystemInfo.operatingSystem.Contains("64bit");
-                #endif
+                return !string.IsNullOrEmpty(path) &&
+                    SystemInfo.operatingSystemFamily == OperatingSystemFamily.Windows &&
+                    SystemInfo.operatingSystem.Contains("64bit");
             }
         }
-        new public static string path {
+
+        public static string path {
             get {
-                foreach (var guid in AssetDatabase.FindAssets("Fastzip")) {
-                    var path = Path.GetFullPath(AssetDatabase.GUIDToAssetPath(guid));
-                    if (Path.GetExtension(path) == ".exe")
-                        return path;
-                }
-                return string.Empty;
+                var result = AssetDatabase.FindAssets("Fastzip")
+                    .Select((guid) => AssetDatabase.GUIDToAssetPath(guid))
+                    .Select((assetPath) => Path.GetFullPath(assetPath))
+                    .FirstOrDefault((fullPath) => Path.GetExtension(fullPath) == ".exe");
+
+                return result != null ?
+                    result :
+                    string.Empty;
             }
         }
 
@@ -62,7 +63,8 @@ namespace ZipBackup {
             this.sources = sources;
         }
 
-        public override bool Start() {
+        protected override ProcessStartInfo GetProcessStartInfo() {
+
             if (packLevel < 0 || packLevel > 9)
                 packLevel = -1;
             if (threads < 1)
@@ -70,13 +72,14 @@ namespace ZipBackup {
             if (earlyOutPercent < 0 || earlyOutPercent > 100)
                 earlyOutPercent = -1;
 
-            startInfo = new ProcessStartInfo();
-            startInfo.FileName = path;
-            startInfo.CreateNoWindow = true;
-            startInfo.UseShellExecute = false;
-            startInfo.RedirectStandardOutput = true;
-            startInfo.RedirectStandardError = true;
-            startInfo.Arguments = string.Empty;
+            var startInfo = new ProcessStartInfo {
+                FileName = path,
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                Arguments = string.Empty
+            };
 
             if (packLevel != -1)
                 startInfo.Arguments += string.Format("-{0} ", packLevel);
@@ -93,27 +96,19 @@ namespace ZipBackup {
 
             startInfo.Arguments += string.Format("\"{0}\" ", output);
 
-            for (int i = 0; i < sources.Length; i++)
-                if (Directory.Exists(sources[i]) || File.Exists(sources[i]))
-                    startInfo.Arguments += string.Format("\"{0}\" ", sources[i]);
+            startInfo.Arguments += string.Join(" ", sources
+                .Where((s) => Directory.Exists(s) || File.Exists(s))
+                .Select((s) => string.Format("\"{0}\"", s))
+            );
 
             if (File.Exists(output))
                 File.Delete(output);
+
             if (!Directory.Exists(Path.GetDirectoryName(output)))
                 Directory.CreateDirectory(Path.GetDirectoryName(output));
 
-            process = new Process();
-            process.StartInfo = startInfo;
-            process.EnableRaisingEvents = true;
-            process.OutputDataReceived += OutputDataReceived;
-            process.ErrorDataReceived += ErrorDataReceived;
-            process.Exited += Exited;
+            return startInfo;
 
-            var started = process.Start();
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
-
-            return started;
         }
 
     }

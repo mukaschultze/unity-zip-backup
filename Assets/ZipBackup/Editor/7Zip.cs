@@ -8,23 +8,19 @@ using UnityEngine;
 namespace ZipBackup {
     public class SevenZip : ZipProcess {
 
-        new public static bool isSupported {
+        public static bool isSupported {
             get {
-                if (string.IsNullOrEmpty(path))
-                    return false;
-                #if UNITY_5_5_OR_NEWER
-                return SystemInfo.operatingSystemFamily == OperatingSystemFamily.Windows;
-                #else
-                return SystemInfo.operatingSystem.ToLower().Contains("windows");
-                #endif
+                return !string.IsNullOrEmpty(path) && SystemInfo.operatingSystemFamily == OperatingSystemFamily.Windows;
             }
         }
-        new public static string path {
+
+        public static string path {
             get {
-                var path = EditorApplication.applicationContentsPath + "/Tools/7z.exe";
-                if (File.Exists(path))
-                    return path;
-                return string.Empty;
+                var path = Path.Combine(EditorApplication.applicationContentsPath, "Tools/7z.exe");
+
+                return File.Exists(path) ?
+                    path :
+                    string.Empty;
             }
         }
 
@@ -40,36 +36,29 @@ namespace ZipBackup {
             this.sources = sources;
         }
 
-        public override bool Start() {
-            startInfo = new ProcessStartInfo();
-            startInfo.FileName = path;
-            startInfo.CreateNoWindow = true;
-            startInfo.UseShellExecute = false;
-            startInfo.RedirectStandardOutput = true;
-            startInfo.RedirectStandardError = true;
-            startInfo.Arguments += string.Format("a -tzip -bd \"{0}\" ", output);
+        protected override ProcessStartInfo GetProcessStartInfo() {
 
-            for (int i = 0; i < sources.Length; i++)
-                if (Directory.Exists(sources[i]) || File.Exists(sources[i]))
-                    startInfo.Arguments += string.Format("\"{0}\" ", sources[i]);
+            var startInfo = new ProcessStartInfo {
+                FileName = path,
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                Arguments = string.Format("a -tzip -bd \"{0}\" ", output)
+            };
+
+            startInfo.Arguments += string.Join(" ", sources
+                .Where((s) => Directory.Exists(s) || File.Exists(s))
+                .Select((s) => string.Format("\"{0}\"", s))
+            );
 
             if (File.Exists(output))
                 File.Delete(output);
+
             if (!Directory.Exists(Path.GetDirectoryName(output)))
                 Directory.CreateDirectory(Path.GetDirectoryName(output));
 
-            process = new Process();
-            process.StartInfo = startInfo;
-            process.EnableRaisingEvents = true;
-            process.OutputDataReceived += OutputDataReceived;
-            process.ErrorDataReceived += ErrorDataReceived;
-            process.Exited += Exited;
-
-            var started = process.Start();
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
-
-            return started;
+            return startInfo;
         }
 
     }
