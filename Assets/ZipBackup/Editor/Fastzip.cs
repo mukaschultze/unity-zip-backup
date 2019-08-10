@@ -22,20 +22,20 @@ namespace ZipBackup {
 
         new public static bool isSupported {
             get {
-                if(string.IsNullOrEmpty(path))
+                if (string.IsNullOrEmpty(path))
                     return false;
-#if UNITY_5_5_OR_NEWER
+                #if UNITY_5_5_OR_NEWER
                 return SystemInfo.operatingSystemFamily == OperatingSystemFamily.Windows && SystemInfo.operatingSystem.Contains("64bit");
-#else
+                #else
                 return SystemInfo.operatingSystem.ToLower().Contains("windows") && SystemInfo.operatingSystem.Contains("64bit");
-#endif
+                #endif
             }
         }
         new public static string path {
             get {
-                foreach(var guid in AssetDatabase.FindAssets("Fastzip")) {
+                foreach (var guid in AssetDatabase.FindAssets("Fastzip")) {
                     var path = Path.GetFullPath(AssetDatabase.GUIDToAssetPath(guid));
-                    if(Path.GetExtension(path) == ".exe")
+                    if (Path.GetExtension(path) == ".exe")
                         return path;
                 }
                 return string.Empty;
@@ -47,11 +47,11 @@ namespace ZipBackup {
         public FastZip(string output, int packLevel, params string[] sources) : this(output, packLevel, -1, -1, FastZipOpt.JunkPaths | FastZipOpt.ZipMode, sources) { }
 
         public FastZip(string output, int packLevel, int threads, int earlyOutPercent, FastZipOpt options, params string[] sources) {
-            if(!isSupported)
+            if (!isSupported)
                 throw new FileLoadException("Fastzip is only supported on 64 bit windows machines");
-            if(string.IsNullOrEmpty(output))
+            if (string.IsNullOrEmpty(output))
                 throw new ArgumentException("Invalid output file path");
-            if(sources.Length < 1)
+            if (sources.Length < 1)
                 throw new ArgumentException("Need at least one source file");
 
             this.output = output;
@@ -63,11 +63,11 @@ namespace ZipBackup {
         }
 
         public override bool Start() {
-            if(packLevel < 0 || packLevel > 9)
+            if (packLevel < 0 || packLevel > 9)
                 packLevel = -1;
-            if(threads < 1)
+            if (threads < 1)
                 threads = -1;
-            if(earlyOutPercent < 0 || earlyOutPercent > 100)
+            if (earlyOutPercent < 0 || earlyOutPercent > 100)
                 earlyOutPercent = -1;
 
             startInfo = new ProcessStartInfo();
@@ -78,28 +78,28 @@ namespace ZipBackup {
             startInfo.RedirectStandardError = true;
             startInfo.Arguments = string.Empty;
 
-            if(packLevel != -1)
+            if (packLevel != -1)
                 startInfo.Arguments += string.Format("-{0} ", packLevel);
-            if(threads != -1)
+            if (threads != -1)
                 startInfo.Arguments += string.Format("-t{0} ", threads);
-            if(earlyOutPercent != -1)
+            if (earlyOutPercent != -1)
                 startInfo.Arguments += string.Format("-e{0} ", earlyOutPercent);
-            if(options == (options | FastZipOpt.ZipMode))
+            if (options == (options | FastZipOpt.ZipMode))
                 startInfo.Arguments += "-z ";
-            if(options == (options | FastZipOpt.JunkPaths))
+            if (options == (options | FastZipOpt.JunkPaths))
                 startInfo.Arguments += "-j ";
-            if(options == (options | FastZipOpt.Verbose))
+            if (options == (options | FastZipOpt.Verbose))
                 startInfo.Arguments += "-v ";
 
             startInfo.Arguments += string.Format("\"{0}\" ", output);
 
-            for(int i = 0; i < sources.Length; i++)
-                if(Directory.Exists(sources[i]) || File.Exists(sources[i]))
+            for (int i = 0; i < sources.Length; i++)
+                if (Directory.Exists(sources[i]) || File.Exists(sources[i]))
                     startInfo.Arguments += string.Format("\"{0}\" ", sources[i]);
 
-            if(File.Exists(output))
+            if (File.Exists(output))
                 File.Delete(output);
-            if(!Directory.Exists(Path.GetDirectoryName(output)))
+            if (!Directory.Exists(Path.GetDirectoryName(output)))
                 Directory.CreateDirectory(Path.GetDirectoryName(output));
 
             process = new Process();

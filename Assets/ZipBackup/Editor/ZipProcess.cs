@@ -28,14 +28,14 @@ namespace ZipBackup {
         public bool Start(bool lockUnityThread) {
             var started = Start();
 
-            if(lockUnityThread && started)
+            if (lockUnityThread && started)
                 process.WaitForExit();
 
             return started;
         }
 
         protected void OutputDataReceived(object sender, DataReceivedEventArgs args) {
-            if(string.IsNullOrEmpty(args.Data))
+            if (string.IsNullOrEmpty(args.Data))
                 return;
 
             outputDataReceivedThreaded(sender, args);
@@ -49,7 +49,7 @@ namespace ZipBackup {
         }
 
         protected void ErrorDataReceived(object sender, DataReceivedEventArgs args) {
-            if(string.IsNullOrEmpty(args.Data))
+            if (string.IsNullOrEmpty(args.Data))
                 return;
 
             errorDataReceivedThreaded(sender, args);
