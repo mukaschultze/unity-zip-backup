@@ -15,13 +15,13 @@ namespace ZipBackup {
         public ExitCallback onExit = (o, a) => { };
         public ExitCallback onExitThreaded = (o, a) => { };
 
-        public string Output { get; protected set; }
-        public string[] Sources { get; protected set; }
-        public Process Process { get; protected set; }
-        public ProcessStartInfo StartInfo { get; protected set; }
+        public string output { get; protected set; }
+        public string[] sources { get; protected set; }
+        public Process process { get; protected set; }
+        public ProcessStartInfo startInfo { get; protected set; }
 
-        public static bool IsSupported { get; private set; }
-        public static bool Path { get; private set; }
+        public static bool isSupported { get; private set; }
+        public static bool path { get; private set; }
 
         public abstract bool Start();
 
@@ -29,7 +29,7 @@ namespace ZipBackup {
             var started = Start();
 
             if(lockUnityThread && started)
-                Process.WaitForExit();
+                process.WaitForExit();
 
             return started;
         }

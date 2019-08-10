@@ -3,13 +3,14 @@ using System.Diagnostics;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
+using System.Linq;
 
 namespace ZipBackup {
     public class SevenZip : ZipProcess {
 
-        new public static bool IsSupported {
+        new public static bool isSupported {
             get {
-                if(string.IsNullOrEmpty(Path))
+                if(string.IsNullOrEmpty(path))
                     return false;
 #if UNITY_5_5_OR_NEWER
                 return SystemInfo.operatingSystemFamily == OperatingSystemFamily.Windows;
@@ -18,7 +19,7 @@ namespace ZipBackup {
 #endif
             }
         }
-        new public static string Path {
+        new public static string path {
             get {
                 var path = EditorApplication.applicationContentsPath + "/Tools/7z.exe";
                 if(File.Exists(path))
@@ -28,46 +29,45 @@ namespace ZipBackup {
         }
 
         public SevenZip(string output, params string[] sources) {
-            if(!IsSupported)
+            if(!isSupported)
                 throw new FileLoadException("Fastzip is only supported on windows");
             if(string.IsNullOrEmpty(output))
                 throw new ArgumentException("Invalid output file path");
             if(sources.Length < 1)
                 throw new ArgumentException("Need at least one source file");
 
-            var sevenZip = this;
-            sevenZip.Output = output;
-            sevenZip.Sources = sources;
+            this.output = output;
+            this.sources = sources;
         }
 
         public override bool Start() {
-            StartInfo = new ProcessStartInfo();
-            StartInfo.FileName = Path;
-            StartInfo.CreateNoWindow = true;
-            StartInfo.UseShellExecute = false;
-            StartInfo.RedirectStandardOutput = true;
-            StartInfo.RedirectStandardError = true;
-            StartInfo.Arguments += string.Format("a -tzip -bd \"{0}\" ", Output);
+            startInfo = new ProcessStartInfo();
+            startInfo.FileName = path;
+            startInfo.CreateNoWindow = true;
+            startInfo.UseShellExecute = false;
+            startInfo.RedirectStandardOutput = true;
+            startInfo.RedirectStandardError = true;
+            startInfo.Arguments += string.Format("a -tzip -bd \"{0}\" ", output);
 
-            for(int i = 0; i < Sources.Length; i++)
-                if(Directory.Exists(Sources[i]) || File.Exists(Sources[i]))
-                    StartInfo.Arguments += string.Format("\"{0}\" ", Sources[i]);
+            for(int i = 0; i < sources.Length; i++)
+                if(Directory.Exists(sources[i]) || File.Exists(sources[i]))
+                    startInfo.Arguments += string.Format("\"{0}\" ", sources[i]);
 
-            if(File.Exists(Output))
-                File.Delete(Output);
-            if(!Directory.Exists(System.IO.Path.GetDirectoryName(Output)))
-                Directory.CreateDirectory(System.IO.Path.GetDirectoryName(Output));
+            if(File.Exists(output))
+                File.Delete(output);
+            if(!Directory.Exists(Path.GetDirectoryName(output)))
+                Directory.CreateDirectory(Path.GetDirectoryName(output));
 
-            Process = new Process();
-            Process.StartInfo = StartInfo;
-            Process.EnableRaisingEvents = true;
-            Process.OutputDataReceived += OutputDataReceived;
-            Process.ErrorDataReceived += ErrorDataReceived;
-            Process.Exited += Exited;
+            process = new Process();
+            process.StartInfo = startInfo;
+            process.EnableRaisingEvents = true;
+            process.OutputDataReceived += OutputDataReceived;
+            process.ErrorDataReceived += ErrorDataReceived;
+            process.Exited += Exited;
 
-            var started = Process.Start();
-            Process.BeginOutputReadLine();
-            Process.BeginErrorReadLine();
+            var started = process.Start();
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
 
             return started;
         }
