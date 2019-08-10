@@ -1,0 +1,29 @@
+{
+    "files.exclude": {
+        "**/.DS_Store": true,
+        "**/.git": true,
+        "**/.gitmodules": true,
+        "**/*.booproj": true,
+        "**/*.pidb": true,
+        "**/*.suo": true,
+        "**/*.user": true,
+        "**/*.userprefs": true,
+        "**/*.unityproj": true,
+        "**/*.meta": true,
+        "build/": true,
+        "Build/": true,
+        "Library/": true,
+        "library/": true,
+        "obj/": true,
+        "Obj/": true,
+        "ProjectSettings/": true,
+        "logs/": true,
+        "Logs/": true,
+        "temp/": true,
+        "Temp/": true,
+        ".vs": true
+    },
+    "files.insertFinalNewline": true,
+    "csharp.suppressDotnetInstallWarning": true,
+    "docomment.syntax": "single"
+}
