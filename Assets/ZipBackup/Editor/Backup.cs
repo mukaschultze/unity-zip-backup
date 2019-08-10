@@ -222,14 +222,14 @@ namespace ZipBackup {
                 backuping = false;
                 lastBackup = DateTime.Now;
 
-                if(zip.process.ExitCode == 0) {
-                    var zipSize = File.ReadAllBytes(path).Length;
-                    var time = (EditorApplication.timeSinceStartup - startTime).ToString("0.00");
+                 if(zip.process.ExitCode == 0)
+                    using(var stream = new FileStream(path, FileMode.Open)) {
+                        var zipSize = stream.Length;
+                        var time = (EditorApplication.timeSinceStartup - startTime).ToString("0.00");
 
-                    if(logToConsole)
-                        Debug.LogFormat("Backuped project into {0} in {1} seconds", EditorUtility.FormatBytes(zipSize), time);
-
-                }
+                        if(logToConsole)
+                            Debug.LogFormat("Backed up project into {0} in {1} seconds", EditorUtility.FormatBytes(zipSize), time);
+                    }
                 else if(logToConsole)
                     Debug.LogWarning("Something went wrong while zipping");
             };
